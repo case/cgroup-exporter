@@ -3,6 +3,6 @@ writeShellApplication {
   name = "push-container";
   runtimeInputs = [ skopeo ];
   text = '' 
-    ${container} | skopeo copy docker-archive:/dev/stdin "ghcr.io/$GITHUB_REPOSITORY" --username "$GITHUB_ACTOR" --password "$GITHUB_TOKEN"
+    ${container} | skopeo copy docker-archive:/dev/stdin "docker://ghcr.io/$GITHUB_REPOSITORY" --dest-username "$GITHUB_ACTOR" --dest-password "$GITHUB_TOKEN"
   '';
 }
