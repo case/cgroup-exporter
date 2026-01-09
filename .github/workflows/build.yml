@@ -3,9 +3,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+  release:
+    types: [released]
 jobs:
   build:
-    env:
     strategy:
       matrix:
         include:
@@ -22,8 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v27
-      - id: login
-        run: nix run --inputs-from . nixpkgs#skopeo -- login --username "$GITHUB_ACTOR" --password "$GITHUB_TOKEN"
+      - run: nix run --inputs-from . nixpkgs#skopeo -- login --username "$GITHUB_ACTOR" --password "$GITHUB_TOKEN"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: nix run .#push-container
