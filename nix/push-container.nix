@@ -6,6 +6,5 @@ writeShellApplication {
   runtimeEnv.imageTag = container.passthru.imageTag;
   text = ''
     ${container} | skopeo copy docker-archive:/dev/stdin "docker://ghcr.io/''${GITHUB_REPOSITORY}:''${imageTag}" --dest-username "$GITHUB_ACTOR" --dest-password "$GITHUB_TOKEN" --digestfile digest
-    fi
   '';
 }
