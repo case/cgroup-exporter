@@ -16,11 +16,19 @@
         cgroup-exporter = final.callPackage ./nix/package.nix { };
       };
 
-      packages = forAllSystems (system: {
-        default = import ./nix/package.nix {
-          inherit (nixpkgs.legacyPackages.${system}) buildGoModule;
-        };
-      });
+      packages = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          cgroup-exporter = pkgs.callPackage ./nix/package.nix { };
+        in rec {
+          default = cgroup-exporter;
+          container = pkgs.callPackage ./nix/container.nix {
+	    inherit cgroup-exporter;
+          };
+	  push-container = pkgs.callPackage ./nix/push-container.nix {
+	    inherit container;
+	  };
+        });
 
       formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
 
