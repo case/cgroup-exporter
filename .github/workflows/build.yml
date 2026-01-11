@@ -20,12 +20,15 @@ jobs:
       attestations: write
       id-token: write
     runs-on: ${{ matrix.runner }}
-    env:
-      REGISTRY: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v27
-      - run: nix run --inputs-from . nixpkgs#skopeo -- login "$REGISTRY" --username "$GITHUB_ACTOR" --password "$GITHUB_TOKEN"
+      - run: nix run --inputs-from . nixpkgs#skopeo -- login ghcr.io --username "$GITHUB_ACTOR" --password "$GITHUB_TOKEN"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: nix run .#push-container "$REGISTRY"
+      - if: github.event_name == 'release'
+        run: echo "DO_TAG=1" >> "$GITHUB_ENV"
+      - run: echo "digest=$(nix run .#push-container "ghcr.io/$GITHUB_REPOSITORY")" >> "$GITHUB_ENV"
+
+
+

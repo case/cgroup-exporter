@@ -2,7 +2,12 @@
 writeShellApplication {
   name = "push-container";
   runtimeInputs = [ skopeo ];
+  runtimeEnv.imageTag = container.imageTag;
   text = '' 
-    ${container} | skopeo copy docker-archive:/dev/stdin "docker://''${1}@@unknown-digest@@" --digestfile /dev/stdout
+    args=()
+    if [ "$DO_TAG" == "1" ]; then
+      args+=(--additional-tag "$imageTag")
+    fi
+    ${container} | skopeo copy docker-archive:/dev/stdin "docker://''${1}@@unknown-digest@@" --digestfile /dev/stdout "''${args[@]}"
   '';
 }
