@@ -10,9 +10,5 @@ dockerTools.streamLayeredImage {
     ExposedPorts."13232/tcp" = { };
     User = "65534:65534"; # nobody:nobody
     Volumes."/sys/fs/cgroup" = { };
-
-    Labels = {
-      "org.opencontainers.image.source" = "https://github.com/arianvp/cgroup-exporter";
-    };
   };
 }
