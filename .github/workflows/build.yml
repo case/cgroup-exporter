@@ -28,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - if: github.event_name == 'release'
         run: echo "DO_TAG=1" >> "$GITHUB_ENV"
-      - run: nix run .#push-container "ghcr.io/$GITHUB_REPOSITORY")"
+      - run: nix run .#push-container "ghcr.io/$GITHUB_REPOSITORY"
 
 
 
