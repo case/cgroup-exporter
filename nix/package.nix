@@ -14,7 +14,9 @@ buildGoModule rec {
     ];
   };
 
-  vendorHash = "sha256-B9ppgJQout7eabd58iAAlgELRM4UFcNVhy50Hokhras=";
+  env.CGO_ENABLED = 0;
+
+  vendorHash = "sha256-PzUdwc04criIThlCDoQKR9N3xBkRSc3UpEGwyBHIlYI=";
 
   passthru = { inherit version; };
 }
