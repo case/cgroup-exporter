@@ -1,8 +1,22 @@
-{ buildGoModule }:
+{ lib, buildGoModule }:
 
-buildGoModule {
+buildGoModule rec {
   pname = "cgroup-exporter";
-  version = "0.1.0";
-  src = ../.;
-  vendorHash = "sha256-B9ppgJQout7eabd58iAAlgELRM4UFcNVhy50Hokhras=";
+  version = "0.2.0";
+
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../go.mod
+      ../go.sum
+      (lib.fileset.fileFilter (file: file.hasExt "go") ../.)
+      ../collector
+    ];
+  };
+
+  env.CGO_ENABLED = 0;
+
+  vendorHash = "sha256-PzUdwc04criIThlCDoQKR9N3xBkRSc3UpEGwyBHIlYI=";
+
+  passthru = { inherit version; };
 }

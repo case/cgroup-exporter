@@ -1,0 +1,15 @@
+{ dockerTools, cgroup-exporter }:
+dockerTools.streamLayeredImage {
+  name = "ghcr.io/arianvp/cgroup-exporter";
+  tag = "${cgroup-exporter.version}-${cgroup-exporter.go.GOARCH}";
+  config = {
+    Entrypoint = [ "${cgroup-exporter}/bin/cgroup-exporter" ];
+    Cmd = [
+      "-listen-address"
+      ":13232"
+    ];
+    ExposedPorts."13232/tcp" = { };
+    User = "65534:65534"; # nobody:nobody
+    Volumes."/sys/fs/cgroup" = { };
+  };
+}
