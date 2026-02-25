@@ -9,7 +9,7 @@
         imports = [ ./nix/module.nix ];
 
         services.prometheus.exporters.cgroup.package =
-          lib.mkDefault self.packages.${pkgs.system}.default;
+          lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       };
 
       overlays.default = final: prev: {
