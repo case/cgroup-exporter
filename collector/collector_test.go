@@ -4,6 +4,7 @@ import (
 	"embed"
 	"errors"
 	"io/fs"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -257,4 +258,84 @@ func TestCanParseRootIOStart(t *testing.T) {
 		}
 	}
 
+}
+
+func TestCanParseNumaStat(t *testing.T) {
+	numastat := `anon N0=3286069248
+file N0=4915474432 N1=12345678
+kernel_stack N0=19283968
+`
+	mapfs := fstest.MapFS{
+		"memory.numa_stat": &fstest.MapFile{Data: []byte(numastat)},
+	}
+	c := New(mapfs, "").(*cgroupCollector)
+	ms := make(chan prometheus.Metric)
+	go func() {
+		defer close(ms)
+		if err := collectNumaStat(strings.NewReader(numastat), "test.slice", c.multipleCollectors["memory.numa_stat"].descs, ms); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	expectedValues := map[string]map[string]float64{
+		"cgroup_memory_numa_anon_bytes":         {"0": 3286069248},
+		"cgroup_memory_numa_file_bytes":         {"0": 4915474432, "1": 12345678},
+		"cgroup_memory_numa_kernel_stack_bytes": {"0": 19283968},
+	}
+	foundMetrics := make(map[string]map[string]bool)
+
+	// Regex to extract metric name from Desc string
+	fqNameRe := regexp.MustCompile(`fqName:\s*"([^"]+)"`)
+
+	for m := range ms {
+		dto := new(io_prometheus_client.Metric)
+		m.Write(dto)
+
+		// Extract metric name from Desc string
+		descStr := m.Desc().String()
+		matches := fqNameRe.FindStringSubmatch(descStr)
+		if len(matches) < 2 {
+			t.Errorf("could not extract metric name from %s", descStr)
+			continue
+		}
+		metricName := matches[1]
+
+		var numaNode, cgroup string
+		for _, l := range dto.Label {
+			if *l.Name == "numa_node" {
+				numaNode = *l.Value
+			}
+			if *l.Name == "cgroup" {
+				cgroup = *l.Value
+			}
+		}
+
+		if cgroup != "test.slice" {
+			t.Errorf("expected cgroup=test.slice, got %s", cgroup)
+		}
+
+		if expectedNodes, ok := expectedValues[metricName]; ok {
+			if expectedValue, ok := expectedNodes[numaNode]; ok {
+				if actualValue := *dto.Gauge.Value; actualValue != expectedValue {
+					t.Errorf("metric %s for %s: expected %f, got %f", metricName, numaNode, expectedValue, actualValue)
+				}
+				if foundMetrics[metricName] == nil {
+					foundMetrics[metricName] = make(map[string]bool)
+				}
+				foundMetrics[metricName][numaNode] = true
+			} else {
+				t.Errorf("unexpected numa_node %s for metric %s", numaNode, metricName)
+			}
+		} else {
+			t.Errorf("unexpected metric %s", metricName)
+		}
+	}
+
+	for metricName, nodes := range expectedValues {
+		for node := range nodes {
+			if !foundMetrics[metricName][node] {
+				t.Errorf("expected metric %s for %s not found", metricName, node)
+			}
+		}
+	}
 }
