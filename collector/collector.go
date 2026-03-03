@@ -352,15 +352,26 @@ type entryVisitor func(n string) (kvVisitor, error)
 func visitNestedKeyed(r io.Reader, visitEntry entryVisitor) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		split := strings.Split(line, " ")
-		k := split[0]
-		vs := split[1:]
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+
+		k := fields[0]
+		vs := fields[1:]
 		visitKV, err := visitEntry(k)
 		if err != nil {
 			return err
 		}
+		if visitKV == nil {
+			continue
+		}
+
 		for _, v := range vs {
 			kv := strings.Split(v, "=")
 			if len(kv) == 0 {

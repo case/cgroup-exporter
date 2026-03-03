@@ -191,6 +191,31 @@ full avg10=0.00 avg60=0.00 avg300=0.00 total=0
 	}
 }
 
+func TestVisitNestedKeyedSkipsNilVisitor(t *testing.T) {
+	input := `skip this=entry
+keep value=42
+`
+
+	seen := false
+	err := visitNestedKeyed(strings.NewReader(input), func(n string) (kvVisitor, error) {
+		if n == "skip" {
+			return nil, nil
+		}
+		return func(k, v string) error {
+			if n == "keep" && k == "value" && v == "42" {
+				seen = true
+			}
+			return nil
+		}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !seen {
+		t.Fatal("expected keep/value=42 to be visited")
+	}
+}
+
 type spyfs struct {
 	t *testing.T
 	fs.FS
@@ -337,5 +362,35 @@ kernel_stack N0=19283968
 				t.Errorf("expected metric %s for %s not found", metricName, node)
 			}
 		}
+	}
+}
+
+func TestCanParseNumaStatWithUnknownEntry(t *testing.T) {
+	numastat := `unknown N0=1234
+anon N0=5678
+`
+
+	c := New(fstest.MapFS{}, "").(*cgroupCollector)
+	ms := make(chan prometheus.Metric, 10)
+	if err := collectNumaStat(strings.NewReader(numastat), "test.slice", c.multipleCollectors["memory.numa_stat"].descs, ms); err != nil {
+		t.Fatal(err)
+	}
+	close(ms)
+
+	found := false
+	for m := range ms {
+		desc := m.Desc().String()
+		if strings.Contains(desc, `fqName: "cgroup_memory_numa_anon_bytes"`) {
+			found = true
+			dto := new(io_prometheus_client.Metric)
+			m.Write(dto)
+			if *dto.Gauge.Value != 5678 {
+				t.Fatalf("expected 5678 got %f", *dto.Gauge.Value)
+			}
+		}
+	}
+
+	if !found {
+		t.Fatal("expected anon metric to be collected")
 	}
 }
