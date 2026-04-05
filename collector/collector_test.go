@@ -219,6 +219,57 @@ func TestDoesntOpenFilesThatItDoesntHaveDescriptionsFor(t *testing.T) {
 	<-metrics
 }
 
+func TestFindFilesInLeafDirectoriesRoot(t *testing.T) {
+	mapfs := fstest.MapFS{
+		"memory.current": &fstest.MapFile{Data: []byte("1234\n")},
+		"cpu.stat":       &fstest.MapFile{Data: []byte("usage_usec 100\n")},
+	}
+	var paths []string
+	err := FindFilesInLeafDirectories(mapfs, ".", func(filePath string, entry fs.DirEntry) error {
+		paths = append(paths, filePath)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("expected files in root directory")
+	}
+	for _, p := range paths {
+		if !fs.ValidPath(p) {
+			t.Errorf("path %q is not a valid fs.FS path", p)
+		}
+	}
+}
+
+func TestCollectsFromRootCgroup(t *testing.T) {
+	mapfs := fstest.MapFS{
+		"memory.current": &fstest.MapFile{Data: []byte("1234\n")},
+	}
+	c := New(mapfs, ".")
+	metrics := make(chan prometheus.Metric)
+	go func() {
+		defer close(metrics)
+		c.Collect(metrics)
+	}()
+	metric := <-metrics
+	if metric == nil {
+		t.Fatal("expected metric from root cgroup")
+	}
+	dto := new(io_prometheus_client.Metric)
+	if err := metric.Write(dto); err != nil {
+		t.Fatal(err)
+	}
+	if *dto.Gauge.Value != 1234 {
+		t.Errorf("expected 1234 got %f", *dto.Gauge.Value)
+	}
+	for _, l := range dto.Label {
+		if *l.Name == "cgroup" && *l.Value != "." {
+			t.Errorf("expected cgroup label '.' got %q", *l.Value)
+		}
+	}
+}
+
 func TestCanParseRootIOStart(t *testing.T) {
 	iostat := `
 7:7 
