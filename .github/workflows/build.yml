@@ -5,6 +5,7 @@ on:
     branches: [main]
   release:
     types: [released]
+  workflow_dispatch:
 jobs:
   build:
     strategy:
@@ -12,8 +13,10 @@ jobs:
         include:
           - system: x86_64-linux
             runner: ubuntu-latest
+            GOARCH: amd64
           - system: aarch64-linux
             runner: ubuntu-24.04-arm
+            GOARCH: arm64
     permissions:
       contents: read
       packages: write
@@ -26,9 +29,13 @@ jobs:
       - run: nix run --inputs-from . nixpkgs#skopeo -- login ghcr.io --username "$GITHUB_ACTOR" --password "$GITHUB_TOKEN"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - if: github.event_name == 'release'
-        run: echo "DO_TAG=1" >> "$GITHUB_ENV"
-      - run: nix run .#push-container "ghcr.io/$GITHUB_REPOSITORY"
+      - run: nix run .#push-container "ghcr.io/${GITHUB_REPOSITORY}@@unknown-digest@@"
+      - run: nix run .#push-container "ghcr.io/${GITHUB_REPOSITORY}:${TAG#v}-${GOARCH}"
+        if: github.event_name == 'release'
+        env:
+          # TODO: multi-arch manifest
+          TAG: ${{ github.event.release.tag_name }}
+          GOARCH: ${{ matrix.GOARCH }}
 
 
 
