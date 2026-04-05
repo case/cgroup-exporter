@@ -67,7 +67,35 @@ func New(fs fs.FS, glob string) prometheus.Collector {
 			"pids.max":     {desc: prometheus.NewDesc("cgroup_pids_max", "", []string{"cgroup"}, nil), collect: collectSingleValue(prometheus.GaugeValue)},
 		},
 		multipleCollectors: map[string]multipleCollector{
-			// TODO: memory.numastat
+			"memory.numa_stat": {descs: map[string]desc{
+				"anon":                     {desc: prometheus.NewDesc("cgroup_memory_numa_anon_bytes", "Amount of memory used in anonymous mappings such as brk(), sbrk(), and mmap(MAP_ANONYMOUS)", []string{"numa_node", "cgroup"}, nil)},
+				"file":                     {desc: prometheus.NewDesc("cgroup_memory_numa_file_bytes", "Amount of memory used to cache filesystem data, including tmpfs and shared memory.", []string{"numa_node", "cgroup"}, nil)},
+				"kernel_stack":             {desc: prometheus.NewDesc("cgroup_memory_numa_kernel_stack_bytes", "Amount of memory allocated to kernel stacks.", []string{"numa_node", "cgroup"}, nil)},
+				"pagetables":               {desc: prometheus.NewDesc("cgroup_memory_numa_pagetables_bytes", "Amount of memory allocated for page tables.", []string{"numa_node", "cgroup"}, nil)},
+				"sec_pagetables":           {desc: prometheus.NewDesc("cgroup_memory_numa_sec_pagetables_bytes", "Amount of memory allocated for secondary page tables.", []string{"numa_node", "cgroup"}, nil)},
+				"shmem":                    {desc: prometheus.NewDesc("cgroup_memory_numa_shmem_bytes", "Amount of cached filesystem data that is swap-backed, such as tmpfs, shm segments, shared anonymous mmap()s", []string{"numa_node", "cgroup"}, nil)},
+				"file_mapped":              {desc: prometheus.NewDesc("cgroup_memory_numa_file_mapped_bytes", "Amount of cached filesystem data mapped with mmap()", []string{"numa_node", "cgroup"}, nil)},
+				"file_dirty":               {desc: prometheus.NewDesc("cgroup_memory_numa_file_dirty_bytes", "Amount of cached filesystem data that was modified but not yet written back to disk", []string{"numa_node", "cgroup"}, nil)},
+				"file_writeback":           {desc: prometheus.NewDesc("cgroup_memory_numa_file_writeback_bytes", "Amount of cached filesystem data that was modified and is currently being written back to disk", []string{"numa_node", "cgroup"}, nil)},
+				"swapcached":               {desc: prometheus.NewDesc("cgroup_memory_numa_swapcached_bytes", "Amount of swap cached in memory.", []string{"numa_node", "cgroup"}, nil)},
+				"anon_thp":                 {desc: prometheus.NewDesc("cgroup_memory_numa_anon_thp_bytes", "Amount of memory used in anonymous mappings backed by transparent hugepages", []string{"numa_node", "cgroup"}, nil)},
+				"file_thp":                 {desc: prometheus.NewDesc("cgroup_memory_numa_file_thp_bytes", "Amount of cached filesystem data backed by transparent hugepages", []string{"numa_node", "cgroup"}, nil)},
+				"shmem_thp":                {desc: prometheus.NewDesc("cgroup_memory_numa_shmem_thp_bytes", "Amount of shm, tmpfs, shared anonymous mmap()s backed by transparent hugepages", []string{"numa_node", "cgroup"}, nil)},
+				"inactive_anon":            {desc: prometheus.NewDesc("cgroup_memory_numa_inactive_anon_bytes", "Amount of memory on the inactive anonymous list", []string{"numa_node", "cgroup"}, nil)},
+				"active_anon":              {desc: prometheus.NewDesc("cgroup_memory_numa_active_anon_bytes", "Amount of memory on the active anonymous list", []string{"numa_node", "cgroup"}, nil)},
+				"inactive_file":            {desc: prometheus.NewDesc("cgroup_memory_numa_inactive_file_bytes", "Amount of memory on the inactive file list", []string{"numa_node", "cgroup"}, nil)},
+				"active_file":              {desc: prometheus.NewDesc("cgroup_memory_numa_active_file_bytes", "Amount of memory on the active file list", []string{"numa_node", "cgroup"}, nil)},
+				"unevictable":              {desc: prometheus.NewDesc("cgroup_memory_numa_unevictable_bytes", "Amount of memory that cannot be reclaimed", []string{"numa_node", "cgroup"}, nil)},
+				"slab_reclaimable":         {desc: prometheus.NewDesc("cgroup_memory_numa_slab_reclaimable_bytes", "Amount of slab memory that might be reclaimed.", []string{"numa_node", "cgroup"}, nil)},
+				"slab_unreclaimable":       {desc: prometheus.NewDesc("cgroup_memory_numa_slab_unreclaimable_bytes", "Amount of slab memory that cannot be reclaimed under memory pressure.", []string{"numa_node", "cgroup"}, nil)},
+				"workingset_refault_anon":  {desc: prometheus.NewDesc("cgroup_memory_numa_workingset_refault_anon", "Number of refaults of previously evicted anonymous pages.", []string{"numa_node", "cgroup"}, nil)},
+				"workingset_refault_file":  {desc: prometheus.NewDesc("cgroup_memory_numa_workingset_refault_file", "Number of refaults of previously evicted file pages.", []string{"numa_node", "cgroup"}, nil)},
+				"workingset_activate_anon": {desc: prometheus.NewDesc("cgroup_memory_numa_workingset_activate_anon", "Number of refaulted anonymous pages that were immediately activated.", []string{"numa_node", "cgroup"}, nil)},
+				"workingset_activate_file": {desc: prometheus.NewDesc("cgroup_memory_numa_workingset_activate_file", "Number of refaulted file pages that were immediately activated.", []string{"numa_node", "cgroup"}, nil)},
+				"workingset_restore_anon":  {desc: prometheus.NewDesc("cgroup_memory_numa_workingset_restore_anon", "Number of restored anonymous pages detected as an active workingset before they got reclaimed.", []string{"numa_node", "cgroup"}, nil)},
+				"workingset_restore_file":  {desc: prometheus.NewDesc("cgroup_memory_numa_workingset_restore_file", "Number of restored file pages detected as an active workingset before they got reclaimed.", []string{"numa_node", "cgroup"}, nil)},
+				"workingset_nodereclaim":   {desc: prometheus.NewDesc("cgroup_memory_numa_workingset_nodereclaim", "Number of times a shadow node has been reclaimed.", []string{"numa_node", "cgroup"}, nil)},
+			}, collect: collectNumaStat},
 			"memory.stat": {
 				descs: map[string]desc{
 					"anon":                     {desc: prometheus.NewDesc("cgroup_memory_anon_bytes", "Amount of memory used in anonymous mappings such as brk(), sbrk(), and mmap(MAP_ANONYMOUS)", []string{"cgroup"}, nil)},
@@ -274,6 +302,25 @@ func collectIOStat(f io.Reader, path string, descs map[string]desc, m chan<- pro
 	})
 }
 
+func collectNumaStat(f io.Reader, path string, descs map[string]desc, m chan<- prometheus.Metric) error {
+	return visitNestedKeyed(f, func(statName string) (kvVisitor, error) {
+		desc, ok := descs[statName]
+		if !ok {
+			return nil, nil
+		}
+		return func(node, value string) error {
+			v, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return nil
+			}
+			// Remove 'N' prefix from node name (e.g., N0 -> 0) to match node_exporter format
+			node = strings.TrimPrefix(node, "N")
+			m <- prometheus.MustNewConstMetric(desc.desc, prometheus.GaugeValue, v, node, path)
+			return nil
+		}, nil
+	})
+}
+
 func collectSingleValue(valueType prometheus.ValueType) collectFunc {
 	return func(f io.Reader, path string, desc *prometheus.Desc, m chan<- prometheus.Metric) error {
 
@@ -305,15 +352,26 @@ type entryVisitor func(n string) (kvVisitor, error)
 func visitNestedKeyed(r io.Reader, visitEntry entryVisitor) error {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		split := strings.Split(line, " ")
-		k := split[0]
-		vs := split[1:]
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+
+		k := fields[0]
+		vs := fields[1:]
 		visitKV, err := visitEntry(k)
 		if err != nil {
 			return err
 		}
+		if visitKV == nil {
+			continue
+		}
+
 		for _, v := range vs {
 			kv := strings.Split(v, "=")
 			if len(kv) == 0 {
