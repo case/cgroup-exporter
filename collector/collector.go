@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
-	"path/filepath"
+	pathpkg "path"
 	"strconv"
 	"strings"
 
@@ -202,7 +202,7 @@ func FindFilesInLeafDirectories(fsys fs.FS, root string, process func(filePath s
 			if isLeaf {
 				for _, entry := range subDirEntries {
 					if !entry.IsDir() {
-						filePath := fmt.Sprintf("%s/%s", path, entry.Name())
+						filePath := pathpkg.Join(path, entry.Name())
 						if err := process(filePath, entry); err != nil {
 							return err
 						}
@@ -213,7 +213,6 @@ func FindFilesInLeafDirectories(fsys fs.FS, root string, process func(filePath s
 		return nil
 	})
 }
-
 
 // Collect implements prometheus.Collector.
 func (c *cgroupCollector) Collect(m chan<- prometheus.Metric) {
@@ -231,7 +230,7 @@ func (c *cgroupCollector) Collect(m chan<- prometheus.Metric) {
 					return fmt.Errorf("failed to open file %q: %w", path, err)
 				}
 				defer f.Close()
-				if err := col.collect(f, filepath.Dir(path), col.desc, m); err != nil {
+				if err := col.collect(f, pathpkg.Dir(path), col.desc, m); err != nil {
 					slog.Error("failed to collect cgroup", "error", err)
 				}
 			}
@@ -241,7 +240,7 @@ func (c *cgroupCollector) Collect(m chan<- prometheus.Metric) {
 					return fmt.Errorf("failed to open file %q: %w", path, err)
 				}
 				defer f.Close()
-				if err := col.collect(f, filepath.Dir(path), col.descs, m); err != nil {
+				if err := col.collect(f, pathpkg.Dir(path), col.descs, m); err != nil {
 					slog.Error("failed to collect cgroup", "error", err)
 				}
 			}
