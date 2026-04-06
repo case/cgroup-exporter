@@ -4,6 +4,7 @@ import (
 	"embed"
 	"errors"
 	"io/fs"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -293,6 +294,31 @@ func TestCollectsFromRootCgroup(t *testing.T) {
 		if *l.Name == "cgroup" && *l.Value != "." {
 			t.Errorf("expected cgroup label '.' got %q", *l.Value)
 		}
+	}
+}
+
+func TestFixturePathsAreModuleZipCompatible(t *testing.T) {
+	// Go module zip files reject paths containing backslashes, which makes
+	// "go install" fail for this module. Additionally, go:embed silently
+	// skips files with backslashes, so affected fixtures are missing from
+	// the embedded test FS without any error.
+	//
+	// Fixture directories copied from a real cgroup tree may contain
+	// systemd-escaped names like "system-systemd\x2dbacklight.slice"
+	// (where \x2d is a literal backslash sequence). This test checks the
+	// on-disk fixture paths to catch these before they're silently dropped.
+	err := fs.WalkDir(os.DirFS("fixtures/cgroup"), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.ContainsRune(path, '\\') {
+			t.Errorf("fixture path contains backslash (incompatible with go:embed and Go module zip): %s\n"+
+				"hint: systemd escapes hyphens as \\x2d in cgroup paths — replace with literal hyphens", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
