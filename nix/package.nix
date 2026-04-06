@@ -2,7 +2,7 @@
 
 buildGoModule rec {
   pname = "cgroup-exporter";
-  version = "0.2.0";
+  version = "0.3.1";
 
   src = lib.fileset.toSource {
     root = ../.;
