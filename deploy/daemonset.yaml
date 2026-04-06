@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cgroup-exporter
+spec:
+  selectors:
+    matchLabels:
+      name: cgroup-exporter
+  template:
+    metadata:
+      labels:
+        name: cgroup-exporter
+    spec:
+      containers:
+        - name: cgroup-exporter
+          image: ghcr.io/arianvp/cgroup-exporter:0.3.1-amd64
+          ports:
+            - containerPort: 13232
+          volumeMounts:
+            - name: cgroupfs
+              mountPath: /sys/fs/cgroup
+              readOnly: true
+      volumes:
+        - name: cgroupfs
+          hostPath:
+            path: /sys/fs/cgroup

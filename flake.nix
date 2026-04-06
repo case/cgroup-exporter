@@ -40,8 +40,27 @@
           };
       });
 
-      checks = forAllSystems (system: {
+      checks = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          container = self.packages.${system}.container;
+        in {
         package = self.packages.${system}.default;
+        podman-kube-test = nixpkgs.lib.nixos.runTest {
+          name = "cgroup-exporter-podman-kube";
+          hostPkgs = pkgs;
+          nodes.machine = {
+            virtualisation.podman.enable = true;
+          };
+          testScript = ''
+            machine.succeed("${container} | podman load")
+            machine.succeed(
+              "podman kube play --publish-all ${./deploy/daemonset.yaml}"
+            )
+            machine.wait_for_open_port(13232)
+            machine.succeed("curl -sf http://localhost:13232/metrics | grep cgroup_memory_current_bytes")
+          '';
+        };
         integration-test = nixpkgs.lib.nixos.runTest {
           name = "cgroup-exporter";
           hostPkgs = nixpkgs.legacyPackages.${system};
@@ -51,8 +70,9 @@
             services.prometheus.exporters.cgroup.port = 8080;
           };
           testScript = ''
-            machine.wait_for_unit("cgroup-exporter.service");
-            machine.succeed("curl http://localhost:8080/metrics");
+            machine.wait_for_unit("cgroup-exporter.service")
+            machine.wait_for_open_port(8080)
+            machine.succeed("curl -sf http://localhost:8080/metrics | grep cgroup_memory_current_bytes")
           '';
         };
       });
