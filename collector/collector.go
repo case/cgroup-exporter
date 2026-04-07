@@ -285,7 +285,15 @@ func (c *cgroupCollector) Collect(m chan<- prometheus.Metric) {
 }
 
 func collectIOStat(f io.Reader, path string, descs map[string]desc, m chan<- prometheus.Metric) error {
+	warnedInvalidDevices := map[string]struct{}{}
 	return visitNestedKeyed(f, func(n string) (kvVisitor, error) {
+		if !isBlockDeviceID(n) {
+			if _, warned := warnedInvalidDevices[n]; !warned {
+				slog.Warn("skipping io.stat entry with invalid device", "device", n, "cgroup", path)
+				warnedInvalidDevices[n] = struct{}{}
+			}
+			return nil, nil
+		}
 		device := n
 		return func(k, v string) error {
 			desc, ok := descs[k]
@@ -300,6 +308,22 @@ func collectIOStat(f io.Reader, path string, descs map[string]desc, m chan<- pro
 			return nil
 		}, nil
 	})
+}
+
+func isBlockDeviceID(device string) bool {
+	major, minor, ok := strings.Cut(device, ":")
+	if !ok || major == "" || minor == "" {
+		return false
+	}
+
+	if _, err := strconv.ParseUint(major, 10, 32); err != nil {
+		return false
+	}
+	if _, err := strconv.ParseUint(minor, 10, 32); err != nil {
+		return false
+	}
+
+	return true
 }
 
 func collectNumaStat(f io.Reader, path string, descs map[string]desc, m chan<- prometheus.Metric) error {
