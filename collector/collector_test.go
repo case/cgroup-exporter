@@ -1,9 +1,11 @@
 package collector
 
 import (
+	"bytes"
 	"embed"
 	"errors"
 	"io/fs"
+	"log/slog"
 	"regexp"
 	"strings"
 	"testing"
@@ -334,6 +336,55 @@ func TestCanParseRootIOStart(t *testing.T) {
 		}
 	}
 
+}
+
+func TestIOStatSkipsInvalidDevices(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(previousLogger)
+	})
+
+	iostat := `(unknown) rbytes=0 wbytes=0 rios=6 wios=0 dbytes=0 dios=0
+259:3 rbytes=241664 wbytes=0 rios=6 wios=0 dbytes=0 dios=0
+(unknown) rbytes=0 wbytes=0 rios=13 wios=0 dbytes=0 dios=0
+259:2 rbytes=581632 wbytes=0 rios=13 wios=0 dbytes=0 dios=0
+`
+	c := New(fstest.MapFS{}, "").(*cgroupCollector)
+	ms := make(chan prometheus.Metric)
+	go func() {
+		defer close(ms)
+		if err := collectIOStat(strings.NewReader(iostat), "init.scope", c.multipleCollectors["io.stat"].descs, ms); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	var metricCount int
+	for m := range ms {
+		metricCount++
+		dto := new(io_prometheus_client.Metric)
+		if err := m.Write(dto); err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range dto.Label {
+			if *l.Name == "device" && *l.Value == "(unknown)" {
+				t.Fatal("unexpected metric emitted for invalid device")
+			}
+		}
+	}
+
+	if metricCount != 12 {
+		t.Fatalf("expected 12 metrics from 2 valid devices, got %d", metricCount)
+	}
+
+	logOutput := logs.String()
+	if !strings.Contains(logOutput, "skipping io.stat entry with invalid device") {
+		t.Fatalf("expected warning log, got %q", logOutput)
+	}
+	if strings.Count(logOutput, "device=(unknown)") != 1 {
+		t.Fatalf("expected one warning for invalid device, got %q", logOutput)
+	}
 }
 
 func TestCanParseNumaStat(t *testing.T) {
